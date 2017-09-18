@@ -129,6 +129,18 @@ unionNfas nfa1 nfa2 = ( (addEdge Epsilon newInitial (initial nfa1))
           newFinal = getNewState combinedWithInitial
           combinedComplete = addState newFinal combinedWithInitial
 
+kleeneStarNfa :: Nfa -> Nfa
+kleeneStarNfa nfa = ( (addEdge Epsilon (final nfa) (initial nfa))
+                    . (addEdge Epsilon newInitial (initial nfa))
+                    . (addEdge Epsilon (final nfa) newFinal)
+                    . (addEdge Epsilon newInitial newFinal) 
+                    . (setInitial newInitial)
+                    . (setFinal newFinal) ) withFinal
+    where newInitial = getNewState nfa
+          withInitial = addState newInitial nfa
+          newFinal = getNewState withInitial
+          withFinal = addState newFinal withInitial
+
 -- Performs an NFA step WITHOUT following empty edges (unless symbol is Epsilon). 
 oneStepNfa :: Nfa -> Symbol -> NfaState -> [NfaState]
 oneStepNfa nfa symbol state 
@@ -159,5 +171,8 @@ stepSetNfa :: Nfa -> [NfaState] -> Symbol -> [NfaState]
 stepSetNfa nfa states symbol = nub $ states >>= stepNfa nfa symbol
 
 accepts :: Nfa -> [Symbol] -> Bool
-accepts nfa symbols = (final nfa) `elem` (foldl (stepSetNfa nfa) [initial nfa] symbols)
+accepts nfa symbols = (final nfa) `elem` (foldl (stepSetNfa nfa) (epsilonClosure nfa $ initial nfa) symbols)
+
+acceptsString :: Nfa -> String -> Bool
+acceptsString nfa str = accepts nfa (map Symbol str)
 

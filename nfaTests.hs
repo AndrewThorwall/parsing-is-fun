@@ -4,44 +4,75 @@ import Test.HUnit
 import Nfa
 import Data.List
 
+makeTest :: Nfa -> String -> Bool -> Test
+makeTest nfa string expected = TestCase (assertEqual "test" expected (nfa `acceptsString` string))
+
+makeTests :: Nfa -> [(String, Bool)] -> [Test]
+makeTests nfa = map (\(x, b) -> makeTest nfa x b)
+
 literalA = literalConstruction (Symbol 'A')
 literalB = literalConstruction (Symbol 'B')
 literalC = literalConstruction (Symbol 'C')
 
+-- 'AB'
 complex1 = concatenateNfas literalA literalB
+-- 'B|C'
 complex2 = unionNfas literalB literalC
+-- 'AB(B|C)'
 complex3 = concatenateNfas complex1 complex2
+-- '(AB(B|C))*'
+complex4 = kleeneStarNfa complex3
+-- '(AB(B|C))*(B|C)
+complex5 = concatenateNfas complex4 complex2
+-- '((AB(B|C))*(B|C))|C
+complex6 = unionNfas literalC complex5
 
-test1 = TestCase (assertBool "Test 1"
-                             $ literalA `accepts` [Symbol 'A'])
+literalATests = makeTests literalA 
+    [ ("A", True)
+    , ("B", False)
+    ]
 
-test2 = TestCase (assertBool "Test 2"
-                             $ not (literalA `accepts` [Symbol 'B']))
+complex1Tests = makeTests complex1
+    [ ("AB", True)
+    , ("BA", False)
+    , ("A", False)
+    , ("B", False)
+    , ("ABA", False)
+    , ("", False)
+    , ("ABBAB", False)
+    ]
 
-test3 = TestCase (assertBool "Test 3"
-                             $ complex1 `accepts` [Symbol 'A', Symbol 'B'])
+complex2Tests = makeTests complex2
+    [ ("A", False)
+    , ("B", True)
+    , ("C", True)
+    , ("", False)
+    , ("AB", False)
+    , ("BA", False)
+    ]
 
-test4 = TestCase (assertBool "Test 4"
-                             $ not (complex1 `accepts` [Symbol 'B', Symbol 'A']))
+complex4Tests = makeTests complex4
+    [ ("", True)
+    , ("ABC", True)
+    , ("ABA", False)
+    , ("ABCABCABCABCABCABCABCABC", True)
+    , ("ABCABBABCABB", True)
+    , ("ABCABBABCABA", False) 
+    ]
 
-test5 = TestCase (assertBool "Test 5"
-                             $ complex2 `accepts` [Symbol 'B'])
+complex6Tests = makeTests complex6
+    [ ("", False)
+    , ("C", True)
+    , ("ABCB", True)
+    , ("B", True)
+    , ("ABBABBC", True)
+    , ("ABBABB", False)
+    ]
 
-test6 = TestCase (assertBool "Test 6"
-                             $ not $ complex2 `accepts` [Symbol 'A'])
-
-test7 = TestCase (assertBool "Test 7"
-                             $ complex3 `accepts` [Symbol 'A', Symbol 'B', Symbol 'B'])
-
-test8 = TestCase (assertBool "Test 8"
-                             $ complex3 `accepts` [Symbol 'A', Symbol 'B', Symbol 'C'])
-
-tests = TestList [ TestLabel "test1" test1
-                 , TestLabel "test2" test2
-                 , TestLabel "test3" test3
-                 , TestLabel "test4" test4
-                 , TestLabel "test5" test5
-                 , TestLabel "test6" test6
-                 , TestLabel "test7" test7
-                 , TestLabel "test8" test8
-                 ]
+tests = TestList 
+    (  literalATests 
+    ++ complex1Tests 
+    ++ complex2Tests 
+    ++ complex4Tests
+    ++ complex6Tests
+    )
