@@ -1,3 +1,5 @@
+module Nfa where
+
 import Data.List
 import qualified Data.Map as Map
 
@@ -42,8 +44,8 @@ getNewState (Nfa { states = s })
     | length (Map.keys s) == 0 = NfaState 0
     | otherwise                = NfaState ((unNfaState $ maximum (Map.keys s)) + 1)
 
-addState :: Nfa -> NfaState -> Nfa
-addState (Nfa { states = n, initial = i, final = f }) s = Nfa 
+addState :: NfaState -> Nfa -> Nfa
+addState s (Nfa { states = n, initial = i, final = f }) = Nfa 
     { states = Map.insert s emptyNfaTransition n
     , initial = i
     , final = f
@@ -54,6 +56,20 @@ addEdge symbol s1 s2 (Nfa { initial = i, states = n, final = f }) = Nfa
     { states = Map.adjust (addEdgeToTransition symbol s2) s1 n 
     , initial = i
     , final = f
+    }
+
+setInitial :: NfaState -> Nfa -> Nfa
+setInitial state nfa = Nfa 
+    { states = states nfa
+    , initial = state
+    , final = final nfa
+    }
+
+setFinal :: NfaState -> Nfa -> Nfa
+setFinal state nfa = Nfa 
+    { states = states nfa
+    , initial = initial nfa
+    , final = state
     }
 
 -- Given a symbol, creates a NFA consisting of an initial state and a final state,
@@ -98,6 +114,21 @@ concatenateNfas nfa1 nfa2 = addEdge Epsilon (final nfa1) shiftedInitial adjusted
               , final = shiftedFinal 
               }
 
+unionNfas :: Nfa -> Nfa -> Nfa
+unionNfas nfa1 nfa2 = ( (addEdge Epsilon newInitial (initial nfa1))
+                      . (addEdge Epsilon newInitial shiftedInitial)
+                      . (addEdge Epsilon (final nfa1) newFinal)
+                      . (addEdge Epsilon shiftedFinal newFinal)
+                      . (setInitial newInitial)
+                      . (setFinal newFinal) ) combinedComplete
+    where (combined, shift) = combineNfas nfa1 nfa2
+          newInitial = getNewState combined
+          shiftedInitial = shiftNfaState shift $ initial nfa2
+          shiftedFinal = shiftNfaState shift $ final nfa2
+          combinedWithInitial = addState newInitial combined
+          newFinal = getNewState combinedWithInitial
+          combinedComplete = addState newFinal combinedWithInitial
+
 -- Performs an NFA step WITHOUT following empty edges (unless symbol is Epsilon). 
 oneStepNfa :: Nfa -> Symbol -> NfaState -> [NfaState]
 oneStepNfa nfa symbol state 
@@ -122,4 +153,11 @@ epsilonClosure :: Nfa -> NfaState -> [NfaState]
 epsilonClosure nfa state = closure [state] (oneEpsilonStepNfa nfa)
 
 stepNfa :: Nfa -> Symbol -> NfaState -> [NfaState]
-stepNfa nfa symbol state = nub $ (oneStepNfa nfa symbol state) >>= (epsilonClosure nfa)
+stepNfa nfa symbol state = nub $ (epsilonClosure nfa state) >>= (oneStepNfa nfa symbol) >>= (epsilonClosure nfa)
+
+stepSetNfa :: Nfa -> [NfaState] -> Symbol -> [NfaState]
+stepSetNfa nfa states symbol = nub $ states >>= stepNfa nfa symbol
+
+accepts :: Nfa -> [Symbol] -> Bool
+accepts nfa symbols = (final nfa) `elem` (foldl (stepSetNfa nfa) [initial nfa] symbols)
+

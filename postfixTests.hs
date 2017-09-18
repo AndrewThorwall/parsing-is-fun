@@ -48,6 +48,8 @@ infixToPostfixTest6 = TestCase (assertEqual "Complex case 2"
                                             (infixToPostfix "(((1|2)|(3|4)+)+|1)*.8")
                                             "12|34|+|+1|*8.")
 
+module PostfixTests where
+
 infixToPostfixTest7 = TestCase (assertEqual "Complex case 3"
                                             (infixToPostfix "1.2+.3*|3.4+.2*|9")
                                             "12+.3*.34+.2*.|9|")
