@@ -44,6 +44,10 @@ getNewState (Nfa { states = s })
     | length (Map.keys s) == 0 = NfaState 0
     | otherwise                = NfaState ((unNfaState $ maximum (Map.keys s)) + 1)
 
+---------------------------------------------------------------------
+-- NFA CONSTRUCTION
+---------------------------------------------------------------------
+
 addState :: NfaState -> Nfa -> Nfa
 addState s (Nfa { states = n, initial = i, final = f }) = Nfa 
     { states = Map.insert s emptyNfaTransition n
@@ -141,6 +145,29 @@ kleeneStarNfa nfa = ( (addEdge Epsilon (final nfa) (initial nfa))
           newFinal = getNewState withInitial
           withFinal = addState newFinal withInitial
 
+postfixToNfa :: String -> Nfa
+postfixToNfa = postfixToNfaRec []
+
+postfixToNfaRec :: [Nfa] -> String -> Nfa
+postfixToNfaRec (nfa:[]) [] = nfa
+postfixToNfaRec stack (x:xs)
+    | length stack >= 2 && x == '.' = postfixToNfaRec (applyBinaryOperator concatenateNfas stack) xs
+    | length stack >= 2 && x == '|' = postfixToNfaRec (applyBinaryOperator unionNfas stack) xs
+    | length stack >= 1 && x == '*' = postfixToNfaRec (applyUnaryOperator kleeneStarNfa stack) xs
+    | otherwise = postfixToNfaRec ((literalConstruction (Symbol x)):stack) xs
+
+applyBinaryOperator :: (a -> a -> a) -> [a] -> [a]
+applyBinaryOperator f (x2:x1:xs) = (f x1 x2):xs
+applyBinaryOperator _ _ = error "Oh no!"
+
+applyUnaryOperator :: (a -> a) -> [a] -> [a]
+applyUnaryOperator f (x:xs) = (f x):xs
+applyUnaryOperator _ _ = error "Oh no!"
+
+---------------------------------------------------------------------
+-- NFA EXECUTION
+---------------------------------------------------------------------
+
 -- Performs an NFA step WITHOUT following empty edges (unless symbol is Epsilon). 
 oneStepNfa :: Nfa -> Symbol -> NfaState -> [NfaState]
 oneStepNfa nfa symbol state 
@@ -170,9 +197,9 @@ stepNfa nfa symbol state = nub $ (epsilonClosure nfa state) >>= (oneStepNfa nfa 
 stepSetNfa :: Nfa -> [NfaState] -> Symbol -> [NfaState]
 stepSetNfa nfa states symbol = nub $ states >>= stepNfa nfa symbol
 
-accepts :: Nfa -> [Symbol] -> Bool
-accepts nfa symbols = (final nfa) `elem` (foldl (stepSetNfa nfa) (epsilonClosure nfa $ initial nfa) symbols)
+nfaAccepts :: Nfa -> [Symbol] -> Bool
+nfaAccepts nfa symbols = (final nfa) `elem` (foldl (stepSetNfa nfa) (epsilonClosure nfa $ initial nfa) symbols)
 
-acceptsString :: Nfa -> String -> Bool
-acceptsString nfa str = accepts nfa (map Symbol str)
+nfaAcceptsString :: Nfa -> String -> Bool
+nfaAcceptsString nfa str = nfaAccepts nfa (map Symbol str)
 

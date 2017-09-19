@@ -5,7 +5,7 @@ import Nfa
 import Data.List
 
 makeTest :: Nfa -> String -> Bool -> Test
-makeTest nfa string expected = TestCase (assertEqual "test" expected (nfa `acceptsString` string))
+makeTest nfa string expected = TestCase (assertEqual "test" expected (nfa `nfaAcceptsString` string))
 
 makeTests :: Nfa -> [(String, Bool)] -> [Test]
 makeTests nfa = map (\(x, b) -> makeTest nfa x b)

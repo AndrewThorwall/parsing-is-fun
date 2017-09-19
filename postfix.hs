@@ -1,12 +1,12 @@
-module Postfix
-( isOperator
-, precedence
-, popAndPushWhile
-, infixToPostfix
-) where
+module Postfix where
 
 isOperator :: Char -> Bool
 isOperator x = elem x ['*', '+', '.', '|']
+
+isLiteral :: Char -> Bool
+isLiteral x
+    | (not $ isOperator x) && (not $ x `elem` ['(', ')']) = True
+    | otherwise = False
 
 -- We define precedence for parentheses to make infixToPostfix cleaner.
 precedence :: Char -> Integer
