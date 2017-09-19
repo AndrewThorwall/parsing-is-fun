@@ -1,7 +1,23 @@
 module Postfix where
 
 isOperator :: Char -> Bool
-isOperator x = elem x ['*', '+', '.', '|']
+isOperator x = elem x ['*', '+', '.', '|', '?']
+
+data RegexChar = Literal Char
+               | Reserved Char deriving (Show, Read, Eq)
+
+toRegexChar :: Char -> RegexChar
+toRegexChar c
+    | isOperator c = Reserved c
+    | c == ')' || c == '(' = Reserved c
+    | otherwise = Literal c
+
+toRegexString :: String -> [RegexChar]
+toRegexString (x1:x2:xs)
+    | x1 == '\\' = (Literal x2):(toRegexString xs)
+    | otherwise = (toRegexChar x1):(toRegexString $ x2:xs)
+toRegexString (x:xs) = (toRegexChar x):(toRegexString xs)
+toRegexString [] = []
 
 isLiteral :: Char -> Bool
 isLiteral x
@@ -12,6 +28,7 @@ isLiteral x
 precedence :: Char -> Integer
 precedence '*' = 3
 precedence '+' = 3
+precedence '?' = 3
 precedence '.' = 2
 precedence '|' = 1
 precedence '(' = 0
@@ -22,7 +39,7 @@ popAndPushWhile :: (a -> Bool) -> [a] -> [a] -> ([a], [a])
 popAndPushWhile pred xs ys = (xs ++ (takeWhile pred $ reverse ys), 
                               reverse (dropWhile pred $ reverse ys))
 
-infixToPostfix :: String -> String
+infixToPostfix :: [RegexChar] -> [RegexChar]
 infixToPostfix xs = infixToPostfixRec xs [] []
 
 -- Shunting-yard algorithm. We assume all operators are left-associative.
