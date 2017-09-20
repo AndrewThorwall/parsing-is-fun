@@ -1,12 +1,11 @@
 module Nfa where
 
+import Preprocessing
 import Data.List
 import qualified Data.Map as Map
 
--- This type is not equipped to deal with NFAs in general--only NFAs that are the 
--- Thomson construction of some regular expression.
-
-data Symbol = Epsilon 
+data Symbol = Epsilon
+            | Wildcard
             | Symbol Char deriving (Show, Read, Eq, Ord)
 
 data NfaState = NfaState Integer deriving (Show, Read, Eq, Ord)
@@ -81,7 +80,17 @@ setFinal state nfa = Nfa
 literalConstruction :: Symbol -> Nfa
 literalConstruction s = Nfa
     { states = Map.fromList [(NfaState 0, 
-                              NfaTransition $ Map.fromList [(s,[NfaState 1])]), 
+                              NfaTransition $ Map.fromList [(s, [NfaState 1])]), 
+                             (NfaState 1, 
+                              NfaTransition $ Map.fromList [])]
+    , initial = NfaState 0
+    , final = NfaState 1
+    }
+
+wildcardConstruction :: Nfa
+wildcardConstruction = Nfa
+    { states = Map.fromList [(NfaState 0, 
+                              NfaTransition $ Map.fromList [(Wildcard, [NfaState 1])]), 
                              (NfaState 1, 
                               NfaTransition $ Map.fromList [])]
     , initial = NfaState 0
@@ -133,28 +142,38 @@ unionNfas nfa1 nfa2 = ( (addEdge Epsilon newInitial (initial nfa1))
           newFinal = getNewState combinedWithInitial
           combinedComplete = addState newFinal combinedWithInitial
 
-kleeneStarNfa :: Nfa -> Nfa
-kleeneStarNfa nfa = ( (addEdge Epsilon (final nfa) (initial nfa))
-                    . (addEdge Epsilon newInitial (initial nfa))
-                    . (addEdge Epsilon (final nfa) newFinal)
-                    . (addEdge Epsilon newInitial newFinal) 
-                    . (setInitial newInitial)
-                    . (setFinal newFinal) ) withFinal
+oneOrMoreNfa :: Nfa -> Nfa
+oneOrMoreNfa nfa = ( (addEdge Epsilon (final nfa) (initial nfa))
+                   . (addEdge Epsilon newInitial (initial nfa))
+                   . (addEdge Epsilon (final nfa) newFinal)
+                   . (setInitial newInitial)
+                   . (setFinal newFinal) ) withFinal
     where newInitial = getNewState nfa
           withInitial = addState newInitial nfa
           newFinal = getNewState withInitial
           withFinal = addState newFinal withInitial
 
-postfixToNfa :: String -> Nfa
+kleeneStarNfa :: Nfa -> Nfa
+kleeneStarNfa = (addSkipNfa . oneOrMoreNfa)
+
+-- Add an empty edge from initial to final.
+addSkipNfa :: Nfa -> Nfa
+addSkipNfa nfa = addEdge Epsilon (initial nfa) (final nfa) nfa
+
+postfixToNfa :: [RegexChar] -> Nfa
 postfixToNfa = postfixToNfaRec []
 
-postfixToNfaRec :: [Nfa] -> String -> Nfa
+postfixToNfaRec :: [Nfa] -> [RegexChar] -> Nfa
 postfixToNfaRec (nfa:[]) [] = nfa
 postfixToNfaRec stack (x:xs)
-    | length stack >= 2 && x == '.' = postfixToNfaRec (applyBinaryOperator concatenateNfas stack) xs
-    | length stack >= 2 && x == '|' = postfixToNfaRec (applyBinaryOperator unionNfas stack) xs
-    | length stack >= 1 && x == '*' = postfixToNfaRec (applyUnaryOperator kleeneStarNfa stack) xs
-    | otherwise = postfixToNfaRec ((literalConstruction (Symbol x)):stack) xs
+    | length stack >= 2 && x == (Reserved '&') = postfixToNfaRec (applyBinaryOperator concatenateNfas stack) xs
+    | length stack >= 2 && x == (Reserved '|') = postfixToNfaRec (applyBinaryOperator unionNfas stack) xs
+    | length stack >= 1 && x == (Reserved '*') = postfixToNfaRec (applyUnaryOperator kleeneStarNfa stack) xs
+    | length stack >= 1 && x == (Reserved '+') = postfixToNfaRec (applyUnaryOperator oneOrMoreNfa stack) xs
+    | length stack >= 1 && x == (Reserved '?') = postfixToNfaRec (applyUnaryOperator addSkipNfa stack) xs
+    | x == (Reserved '.') = postfixToNfaRec (wildcardConstruction:stack) xs
+    | isLiteral x = postfixToNfaRec ((literalConstruction (Symbol $ unRegexChar x)):stack) xs
+    | otherwise = error "Oh no!"
 
 applyBinaryOperator :: (a -> a -> a) -> [a] -> [a]
 applyBinaryOperator f (x2:x1:xs) = (f x1 x2):xs
@@ -170,9 +189,8 @@ applyUnaryOperator _ _ = error "Oh no!"
 
 -- Performs an NFA step WITHOUT following empty edges (unless symbol is Epsilon). 
 oneStepNfa :: Nfa -> Symbol -> NfaState -> [NfaState]
-oneStepNfa nfa symbol state 
-    | Map.member symbol t = t Map.! symbol
-    | otherwise = []
+oneStepNfa nfa symbol state = union (Map.findWithDefault [] symbol t) $
+    if symbol == Epsilon then [] else (Map.findWithDefault [] Wildcard t)
     where t = unNfaTransition $ (states nfa) Map.! state
 
 oneEpsilonStepNfa :: Nfa -> NfaState -> [NfaState]
