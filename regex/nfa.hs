@@ -221,3 +221,14 @@ nfaAccepts nfa symbols = (final nfa) `elem` (foldl (stepSetNfa nfa) (epsilonClos
 nfaAcceptsString :: Nfa -> String -> Bool
 nfaAcceptsString nfa str = nfaAccepts nfa (map Symbol str)
 
+nfaMatches :: Nfa -> [Symbol] -> Maybe [Symbol]
+nfaMatches nfa symbols
+    | statesList == [] = Nothing
+    | otherwise = Just $ take (length statesList - 1) symbols
+    where statesList = takeUntilLast (elem $ final nfa) $ scanl (stepSetNfa nfa) (epsilonClosure nfa $ initial nfa) symbols
+
+nfaMatchesString :: Nfa -> String -> Maybe String
+nfaMatchesString nfa str = (Just (map (\(Symbol c) -> c))) <*> (nfaMatches nfa (map Symbol str))
+
+takeUntilLast :: (a -> Bool) -> [a] -> [a]
+takeUntilLast pred = reverse . (dropWhile $ not . pred) . reverse

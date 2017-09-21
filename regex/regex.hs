@@ -10,3 +10,6 @@ buildRegex str = Regex $ (postfixToNfa . infixToPostfix . regexToInfix . toRegex
 
 regexAccepts :: Regex -> String -> Bool
 regexAccepts (Regex nfa) s = nfaAcceptsString nfa s
+
+regexMatches :: Regex -> String -> Maybe String
+regexMatches (Regex nfa) s = nfaMatchesString nfa s
